@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pay ₹{{ amount }} – Razorpay</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 420px; margin: 2rem auto; padding: 0 1rem; text-align: center; }
+    h1 { font-size: 1.25rem; }
+    .amount { font-size: 1.5rem; font-weight: 700; margin: 0.5rem 0; }
+    button { padding: 0.75rem 1.5rem; background: #0f766e; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; margin-top: 1rem; }
+    button:hover { background: #0d9488; }
+    .error { color: #c00; margin-top: 0.5rem; }
+    .qr-section { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0; }
+    .qr-section h3 { font-size: 0.9rem; color: #64748b; margin: 0 0 0.75rem 0; font-weight: 600; }
+    .qr-placeholder { min-height: 180px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; margin: 0.75rem 0; }
+    .qr-placeholder.loading { color: #64748b; }
+    .qr-image { max-width: 220px; height: auto; margin: 0.5rem auto; display: block; }
+    .qr-display { margin: 0.75rem 0; }
+    .qr-iframe { width: 220px; height: 220px; border: 1px solid #e2e8f0; border-radius: 12px; display: block; margin: 0 auto; }
+    .qr-link { font-size: 0.85rem; margin-top: 0.5rem; word-break: break-all; display: inline-block; color: #0f766e; }
+    .btn-secondary { background: #64748b; color: #fff; }
+    .btn-secondary:hover { background: #475569; }
+    .payment-note { font-size: 0.8rem; color: #64748b; margin: 0.5rem 0 0 0; }
+  </style>
+</head>
+<body>
+  <h1>Complete Payment</h1>
+  <p class="amount">₹ {{ amount }}</p>
+  <p>Order: <code>{{ order_id }}</code></p>
+  <p class="payment-note">Cards, Net Banking & UPI. Bank page opens in this tab (no popup). Your bank will send OTP when required.</p>
+  <button id="pay-btn">Pay with Razorpay</button>
+  <p id="err" class="error"></p>
+
+  {% if qr_image_url %}
+  <div class="qr-section">
+    <h3>— Or pay by QR Code —</h3>
+    <p style="font-size:0.85rem;color:#64748b;margin-bottom:0.5rem;">Scan with any UPI app (GPay, PhonePe, etc.)</p>
+    <div class="qr-display">
+      <img src="{{ qr_image_url }}" alt="UPI QR Code" class="qr-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+      <p id="qr-fallback" style="display:none; font-size:0.85rem; color:#64748b;">Open the link below to see and scan the QR code.</p>
+    </div>
+    <a class="qr-link" href="{{ qr_image_url }}" target="_blank" rel="noopener">Open QR code page (scan here)</a>
+  </div>
+  {% endif %}
+
+  <p style="margin-top: 1.5rem;"><a href="/api/fraud/payment-review/">Cancel</a> · <a href="{{ dashboard_url|default:'http://localhost:5173' }}">Back to Dashboard</a></p>
+
+  <script>
+    const options = {
+      key: "{{ razorpay_key_id|escapejs }}",
+      amount: "{{ amount_paise }}",
+      order_id: "{{ order_id|escapejs }}",
+      name: "Fraud Detection Demo",
+      description: "Payment of ₹{{ amount }}",
+      redirect: true,
+      callback_url: "{{ callback_url|escapejs }}",
+      config: {
+        display: {
+          blocks: {
+            netbanking: {
+              name: "Net Banking",
+              instruments: [{ method: "netbanking" }]
+            },
+            upiQr: {
+              name: "UPI & QR Code",
+              instruments: [{ method: "upi" }]
+            },
+            cards: {
+              name: "Cards",
+              instruments: [{ method: "card" }]
+            },
+            wallet: {
+              name: "Wallets",
+              instruments: [{ method: "wallet" }]
+            }
+          },
+          sequence: ["block.netbanking", "block.upiQr", "block.cards", "block.wallet"],
+          preferences: { show_default_blocks: false }
+        }
+      },
+      handler: function (response) {
+        const verifyUrl = "{{ verify_url|escapejs }}";
+        const successUrl = "{{ success_url|escapejs }}";
+        const failedUrl = "{{ failed_url|escapejs }}";
+        const payload = {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+          device: "{{ device|escapejs }}",
+          location: "{{ location|escapejs }}",
+          csrfmiddlewaretoken: "{{ csrf_token }}"
+        };
+        const formBody = Object.keys(payload).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(payload[k])).join('&');
+        fetch(verifyUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': "{{ csrf_token }}" },
+          body: formBody,
+          credentials: 'same-origin'
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.status === 'success') {
+              const url = data.id ? successUrl + '?tx_id=' + encodeURIComponent(data.id) : successUrl;
+              window.location.href = url;
+            } else window.location.href = failedUrl;
+          })
+          .catch(() => { window.location.href = failedUrl; });
+      },
+      prefill: { email: "test@example.com" },
+      theme: { color: "#0f766e" }
+    };
+    const rzp = new Razorpay(options);
+    document.getElementById('pay-btn').onclick = function () {
+      rzp.open();
+    };
+
+  </script>
+</body>
+</html>

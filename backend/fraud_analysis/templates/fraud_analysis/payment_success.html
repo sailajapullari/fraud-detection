@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Success</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #0f766e; font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .sub { color: #666; margin-bottom: 1.5rem; }
+    a { color: #0f766e; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin: 1rem 0; text-align: left; }
+    .card h3 { margin: 0 0 0.75rem 0; font-size: 0.9rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid #e2e8f0; font-size: 0.95rem; }
+    .row:last-child { border-bottom: none; }
+    .row .label { color: #64748b; }
+    .row .value { font-weight: 600; }
+    .risk-low { color: #10b981; }
+    .risk-medium { color: #f59e0b; }
+    .risk-high { color: #ef4444; }
+    .risk-critical { color: #dc2626; }
+    .status-badge { display: inline-block; padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
+    .status-success { background: #d1fae5; color: #065f46; }
+    .status-blocked { background: #fee2e2; color: #991b1b; }
+    .links { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Payment Successful</h1>
+  <p class="sub">Your payment was verified and fraud analysis has been run.</p>
+
+  {% if transaction %}
+  <div class="card">
+    <h3>Transaction details</h3>
+    <div class="row">
+      <span class="label">Order ID</span>
+      <span class="value" style="font-family: monospace; font-size: 0.85rem;">{{ transaction.razorpay_order_id }}</span>
+    </div>
+    <div class="row">
+      <span class="label">Payment ID</span>
+      <span class="value" style="font-family: monospace; font-size: 0.85rem;">{{ transaction.razorpay_payment_id|default:"—" }}</span>
+    </div>
+    <div class="row">
+      <span class="label">Amount</span>
+      <span class="value">₹ {{ transaction.amount }}</span>
+    </div>
+    <div class="row">
+      <span class="label">Device</span>
+      <span class="value">{{ transaction.device }}</span>
+    </div>
+    <div class="row">
+      <span class="label">Location</span>
+      <span class="value">{{ transaction.location }}</span>
+    </div>
+    <div class="row">
+      <span class="label">Status</span>
+      <span class="value"><span class="status-badge {% if transaction.status == 'BLOCKED' %}status-blocked{% else %}status-success{% endif %}">{{ transaction.status }}</span></span>
+    </div>
+    <div class="row">
+      <span class="label">Time</span>
+      <span class="value">{{ transaction.timestamp|date:"M d, Y H:i" }}</span>
+    </div>
+  </div>
+
+  {% if transaction.risk_analysis %}
+  <div class="card">
+    <h3>Fraud analysis</h3>
+    <div class="row">
+      <span class="label">Risk level</span>
+      <span class="value risk-{{ transaction.risk_analysis.risk_level|lower }}">{{ transaction.risk_analysis.risk_level }}</span>
+    </div>
+    <div class="row">
+      <span class="label">Risk score</span>
+      <span class="value">{{ transaction.risk_analysis.risk_score }}%</span>
+    </div>
+    {% if transaction.risk_analysis.anomaly_reasons %}
+    <div class="row">
+      <span class="label">Notes</span>
+      <span class="value" style="font-size: 0.85rem;">{{ transaction.risk_analysis.anomaly_reasons }}</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <div class="links">
+    <a href="{{ dashboard_url|default:'http://localhost:5173' }}">Back to Dashboard</a>
+    <a href="/api/fraud/payment-review/">Make another payment</a>
+  </div>
+</body>
+</html>
